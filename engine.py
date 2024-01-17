@@ -42,7 +42,7 @@ def train_step(
 
         train_loss += loss.item()
 
-        correct += (output.argmax(dim=1) == target).sum().item()
+        correct += (output.argmax(dim=1) == target.argmax(dim=1)).sum().item()
         total += target.size(0)
 
     train_loss /= len(train_loader)

@@ -17,7 +17,7 @@ import torch
 import torch.nn.functional as F
 
 
-def get_resnet50(pretrained=False):
+def get_resnet50(pretrained=False, num_classes=10):
     if pretrained:
         model = resnet50(weights=ResNet50_Weights.IMAGENET1K_V2)
 
@@ -25,12 +25,12 @@ def get_resnet50(pretrained=False):
         for param in model.parameters():
             param.requires_grad = False
 
-        for param in model.layer4.parameters():
-            param.requires_grad = True
+        # for param in model.layer4.parameters():
+        #     param.requires_grad = True
 
-        for i, (name, layer) in enumerate(model.layer4.named_modules()):
-            if isinstance(layer, torch.nn.Conv2d):
-                layer.reset_parameters()
+        # for i, (name, layer) in enumerate(model.layer4.named_modules()):
+        #     if isinstance(layer, torch.nn.Conv2d):
+        #         layer.reset_parameters()
 
     else:
         model = resnet50()
@@ -41,10 +41,10 @@ def get_resnet50(pretrained=False):
     # model.avgpool = torch.nn.Identity()
 
     model.fc = torch.nn.Sequential(
-        torch.nn.Dropout(p=0.2),
+        # torch.nn.Dropout(p=0.2),
         torch.nn.Linear(
             in_features=2048,
-            out_features=68 * 2,
+            out_features=num_classes,
             bias=True
         )
     )
@@ -184,7 +184,7 @@ def get_convnext_tiny(pretrained=False):
 
 def get_model(model_name, pretrained=False, num_classes=10):
     if model_name == "ResNet50":
-        return get_resnet50(pretrained)
+        return get_resnet50(pretrained, num_classes)
     elif model_name == "ResNet18":
         return get_resnet18(pretrained, num_classes)
     elif model_name == "ResNet101":

@@ -8,6 +8,7 @@ import torch
 from torch.utils.data import DataLoader
 from torchvision.transforms import v2
 import torchvision
+from torch.utils.data import default_collate
 torchvision.disable_beta_transforms_warning()
 
 
@@ -70,11 +71,11 @@ def main():
         v2.RandomHorizontalFlip(p=0.5),
         v2.RandomRotation(degrees=(-60, 60)),
         v2.RandomAffine(degrees=(-15, 15), translate=(0.25, 0.25), scale=(0.7, 1.3), shear=(-15, 15, -15, 15)),
-        v2.RandomPerspective(distortion_scale=0.1, p=0.2),
+        # v2.RandomPerspective(distortion_scale=0.1, p=0.2),
         v2.ColorJitter(brightness=0.2, contrast=0.2, saturation=0.2),
         v2.GaussianBlur(kernel_size=3, sigma=(0.1, 1.0)),
         v2.RandomAutocontrast(p=0.2),
-        v2.RandomEqualize(p=0.2),
+        # v2.RandomEqualize(p=0.2),
 
         v2.ToDtype(torch.float, scale=True),
         v2.Normalize(mean=[0.485,0.456,0.406],std=[0.229,0.224,0.225]),
@@ -96,13 +97,20 @@ def main():
     dataset_name = ["CUB", "CUB and FGVC-Aircraft", "FoodX"][DATASET]
     num_classes = [200, 200 + 100, 251][DATASET]
 
+    cutmix = v2.CutMix(num_classes=num_classes)
+    mixup = v2.MixUp(num_classes=num_classes)
+    cutmix_or_mixup = v2.RandomChoice([cutmix, mixup])
+
+    def collate_fn(batch):
+        return cutmix_or_mixup(*default_collate(batch))
+
     if dataset_name == 'CUB':
         dataset_path = "/apps/local/shared/CV703/datasets/CUB/CUB_200_2011"
 
         train_dataset = CUBDataset(image_root_path=dataset_path, transform=transforms_train, split="train")
         test_dataset = CUBDataset(image_root_path=dataset_path, transform=transforms_test, split="test")
 
-        train_loader = DataLoader(train_dataset, batch_size=BATCH_SIZE, shuffle=True, num_workers=8)
+        train_loader = DataLoader(train_dataset, batch_size=BATCH_SIZE, shuffle=True, num_workers=8, collate_fn=collate_fn)
         test_loader = DataLoader(test_dataset, batch_size=BATCH_SIZE, shuffle=False, num_workers=8)
 
         class_names = train_dataset.classes
@@ -122,7 +130,8 @@ def main():
         train_loader = torch.utils.data.DataLoader(
                     concat_dataset_train,
                     batch_size=BATCH_SIZE, shuffle=True,
-                    num_workers=8, pin_memory=True
+                    num_workers=8, pin_memory=True,
+                    collate_fn=collate_fn
                     )
         test_loader = torch.utils.data.DataLoader(
                     concat_dataset_test,
@@ -141,7 +150,7 @@ def main():
         train_dataset = FOODDataset(data_dir=dataset_path, transform=transforms_train, split="train")
         test_dataset = FOODDataset(data_dir=dataset_path, transform=transforms_test, split="test")
 
-        train_loader = DataLoader(train_dataset, batch_size=BATCH_SIZE, shuffle=True, num_workers=8)
+        train_loader = DataLoader(train_dataset, batch_size=BATCH_SIZE, shuffle=True, num_workers=8, collate_fn=collate_fn)
         test_loader = DataLoader(test_dataset, batch_size=BATCH_SIZE, shuffle=False, num_workers=8)
 
 
@@ -192,6 +201,7 @@ def main():
         json.dump(train_summary, f, indent=4)
 
     plot_results(results["train_loss"], results["val_loss"], "Loss", save_dir)
+    plot_results(results["train_accucary"], results["val_accuracy"], "Accuracy", save_dir)
 
 if __name__ == "__main__":
     main()
