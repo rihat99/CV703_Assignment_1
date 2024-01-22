@@ -12,6 +12,8 @@ from torch import nn
 import torch
 import torch.nn.functional as F
 
+import math
+
 
 def _is_contiguous(tensor: torch.Tensor) -> bool:
     # jit is oh so lovely :/
@@ -149,22 +151,21 @@ class ConvTransNeXtLarge(nn.Module):
         else:
             self.conv_model = convnext_large()
             
-        self.conv_model.features[6] = torch.nn.Identity()
-        self.conv_model.features[7] = torch.nn.Identity()
+        self.conv_model.features = nn.Sequential(*self.conv_model.features[:6])
+
+        self.pos_encoder = PositionalEncoding(768, dropout=0.2)
 
         encoder_layer = nn.TransformerEncoderLayer(
             d_model=768,  # This should match the feature size of ConvNeXt's last layer
             nhead=8,      # Number of attention heads
             dim_feedforward=2048,
-            dropout=0.1,
+            dropout=0.2,
             activation='gelu',
-            batch_first=True
+            batch_first=False
         )
         self.transformer_encoder = nn.TransformerEncoder(encoder_layer, num_layers=4)
 
         self.conv_model.classifier = torch.nn.Sequential(
-            LayerNorm2d(768, eps=1e-06),
-            nn.Flatten(start_dim=1, end_dim=-1),
             nn.Linear(
                 in_features=768,
                 out_features=num_classes,
@@ -176,14 +177,32 @@ class ConvTransNeXtLarge(nn.Module):
         x = self.conv_model.features(x)
 
         b, c, h, w = x.size()
-        x = x.view(b, c, h * w).permute(0, 2, 1)
-        x = self.transformer_encoder(x)
-        x = x.permute(0, 2, 1).view(b, c, h, w)
+        x = x.view(b, c, h * w).permute(2, 0, 1)
 
-        x = self.conv_model.avgpool(x)
+        x = self.pos_encoder(x)
+        x = self.transformer_encoder(x)
+
+        x = torch.mean(x, dim=0)
+
         x = self.conv_model.classifier(x)
 
         return x
+
+class PositionalEncoding(nn.Module):
+    def __init__(self, d_model, dropout=0.1, max_len=5000):
+        super(PositionalEncoding, self).__init__()
+        self.dropout = nn.Dropout(p=dropout)
+
+        position = torch.arange(max_len).unsqueeze(1)
+        div_term = torch.exp(torch.arange(0, d_model, 2) * -(math.log(10000.0) / d_model))
+        pe = torch.zeros(max_len, 1, d_model)
+        pe[:, 0, 0::2] = torch.sin(position * div_term)
+        pe[:, 0, 1::2] = torch.cos(position * div_term)
+        self.register_buffer('pe', pe)
+
+    def forward(self, x):
+        x = x + self.pe[:x.size(0)]
+        return self.dropout(x)
     
 
 class ConvTransNeXtTiny(nn.Module):
@@ -204,15 +223,17 @@ class ConvTransNeXtTiny(nn.Module):
             
         self.conv_model.features = nn.Sequential(*self.conv_model.features[:6])
 
+        self.pos_encoder = PositionalEncoding(384, dropout=0.2)
+
         encoder_layer = nn.TransformerEncoderLayer(
             d_model=384,  # This should match the feature size of ConvNeXt's last layer
             nhead=8,      # Number of attention heads
             dim_feedforward=1024,
-            dropout=0.1,
+            dropout=0.2,
             activation='gelu',
             batch_first=False
         )
-        self.transformer_encoder = nn.TransformerEncoder(encoder_layer, num_layers=4)
+        self.transformer_encoder = nn.TransformerEncoder(encoder_layer, num_layers=3)
 
         self.conv_model.classifier = torch.nn.Sequential(
             nn.Linear(
@@ -227,6 +248,8 @@ class ConvTransNeXtTiny(nn.Module):
 
         b, c, h, w = x.size()
         x = x.view(b, c, h * w).permute(2, 0, 1)
+
+        x = self.pos_encoder(x)
         x = self.transformer_encoder(x)
         # x = x.permute(0, 2, 1).view(b, c, h, w)
 

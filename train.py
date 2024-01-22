@@ -43,6 +43,7 @@ FREEZE = config["FREEZE"]
 
 DATASET = config["DATASET"]
 CUT_UP_MIX = config["CUT_UP_MIX"]
+HPC = config["HPC"]
 
 DEVICE = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
 print(f"Using {DEVICE} device")
@@ -75,7 +76,7 @@ def main():
         v2.RandomResizedCrop((IMAGE_SIZE, IMAGE_SIZE), scale=(0.8, 1.0), antialias=True),
 
         # v2.AutoAugment(policy=v2.AutoAugmentPolicy.IMAGENET, ),
-        v2.RandAugment(num_ops=2, magnitude=10),
+        v2.RandAugment(num_ops=6, magnitude=15),
         v2.RandomErasing(p=0.2),
 
         v2.ToDtype(torch.float, scale=True),
@@ -106,8 +107,13 @@ def main():
     else:
         collate_fn = None
 
+    if HPC:
+        dataset_path_prefix = "/apps/local/shared/CV703/datasets/"
+    else:
+        dataset_path_prefix = "datasets/"
+
     if dataset_name == 'CUB':
-        dataset_path = "/apps/local/shared/CV703/datasets/CUB/CUB_200_2011"
+        dataset_path = dataset_path_prefix + "CUB/CUB_200_2011"
 
         train_dataset = CUBDataset(image_root_path=dataset_path, transform=transforms_train, split="train")
         test_dataset = CUBDataset(image_root_path=dataset_path, transform=transforms_test, split="test")
@@ -118,11 +124,11 @@ def main():
         class_names = train_dataset.classes
 
     elif dataset_name == 'CUB and FGVC-Aircraft':
-        dataset_path_cub = "/apps/local/shared/CV703/datasets/CUB/CUB_200_2011"
+        dataset_path_cub = dataset_path_prefix + "CUB/CUB_200_2011"
         train_dataset_cub = CUBDataset(image_root_path=dataset_path_cub, transform=transforms_train, split="train")
         test_dataset_cub = CUBDataset(image_root_path=dataset_path_cub, transform=transforms_test, split="test")
 
-        dataset_path_aircraft = "/apps/local/shared/CV703/datasets/fgvc-aircraft-2013b"
+        dataset_path_aircraft = dataset_path_prefix + "fgvc-aircraft-2013b"
         train_dataset_aircraft = FGVCAircraft(root=dataset_path_aircraft, transform=transforms_train, train=True)
         test_dataset_aircraft = FGVCAircraft(root=dataset_path_aircraft, transform=transforms_test, train=False)
 
@@ -147,7 +153,7 @@ def main():
         class_names = [*classes_1, *classes_2]
 
     elif dataset_name == 'FoodX':
-        dataset_path = "/apps/local/shared/CV703/datasets/FoodX/food_dataset"
+        dataset_path = dataset_path_prefix + "FoodX/food_dataset"
 
         train_dataset = FOODDataset(data_dir=dataset_path, transform=transforms_train, split="train")
         test_dataset = FOODDataset(data_dir=dataset_path, transform=transforms_test, split="test")
@@ -199,10 +205,11 @@ def main():
             param.requires_grad = True
 
         optimizer = torch.optim.AdamW(model.parameters(), lr=FINETUNE_LR)
-        if LEARNING_SCHEDULER == "CosineAnnealingLR":
-            lr_scheduler = torch.optim.lr_scheduler.CosineAnnealingLR(optimizer, T_max=FINETUNE_EPOCHS)
-        else:
-            lr_scheduler = None
+        # if LEARNING_SCHEDULER == "CosineAnnealingLR":
+        #     lr_scheduler = torch.optim.lr_scheduler.CosineAnnealingLR(optimizer, T_max=FINETUNE_EPOCHS)
+        # else:
+        #     lr_scheduler = None
+        lr_scheduler = None
 
         results_2 = trainer(
             model=model,
