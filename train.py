@@ -28,10 +28,12 @@ LEARNING_RATE = float(config["LEARNING_RATE"])
 LEARNING_SCHEDULER = config["LEARNING_SCHEDULER"]
 BATCH_SIZE = int(config["BATCH_SIZE"])
 NUM_EPOCHS = int(config["NUM_EPOCHS"])
-LINEAR_PROBING = config["LINEAR_PROBING"]
-PROBING_EPOCHS = int(config["PROBING_EPOCHS"])
-LOSS = config["LOSS"]
 
+FINETUNE = config["FINETUNE"]
+FINETUNE_EPOCHS = int(config["FINETUNE_EPOCHS"])
+FINETUNE_LR = float(config["FINETUNE_LR"])
+
+LOSS = config["LOSS"]
 LABEL_SMOOTHING = float(config["LABEL_SMOOTHING"])
 
 IMAGE_SIZE = int(config["IMAGE_SIZE"])
@@ -40,6 +42,7 @@ PRETRAINED = config["PRETRAINED"]
 FREEZE = config["FREEZE"]
 
 DATASET = config["DATASET"]
+CUT_UP_MIX = config["CUT_UP_MIX"]
 
 DEVICE = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
 print(f"Using {DEVICE} device")
@@ -57,29 +60,23 @@ def START_seed():
 def main():
     START_seed()
 
+    dataset_name = ["CUB", "CUB and FGVC-Aircraft", "FoodX"][DATASET]
+    num_classes = [200, 200 + 100, 251][DATASET]
+
     #run id is date and time of the run
     run_id = time.strftime("%Y-%m-%d_%H-%M-%S")
-
-    #create folder for this run in runs folder
-    os.mkdir("./runs/" + run_id)
-
-    save_dir = "./runs/" + run_id
+    save_dir = "./runs/" + dataset_name + '/' + MODEL + '/' + run_id
+    os.makedirs(save_dir, exist_ok=True)
     
 
     #load data
     transforms_train = v2.Compose([
         v2.ToImage(),
-        v2.RandomResizedCrop((IMAGE_SIZE, IMAGE_SIZE), scale=(0.6, 1.0), antialias=True),
+        v2.RandomResizedCrop((IMAGE_SIZE, IMAGE_SIZE), scale=(0.8, 1.0), antialias=True),
 
-        v2.RandomAffine(degrees=(-15, 15), translate=(0.10, 0.10), scale=(0.8, 1.2), shear=(-10, 10, -10, 10)),
-        v2.RandomPerspective(distortion_scale=0.1, p=0.2),
-        v2.RandomHorizontalFlip(p=0.5),
-        v2.RandomErasing(p=0.1),
-        v2.ColorJitter(brightness=0.15, contrast=0.15, saturation=0.15),
-        v2.AutoAugment(policy=v2.AutoAugmentPolicy.IMAGENET, ),
-        v2.GaussianBlur(kernel_size=3, sigma=(0.1, 2.0)),
-        v2.RandomAutocontrast(p=0.1),
-        v2.RandomEqualize(p=0.1),
+        # v2.AutoAugment(policy=v2.AutoAugmentPolicy.IMAGENET, ),
+        v2.RandAugment(num_ops=2, magnitude=10),
+        v2.RandomErasing(p=0.2),
 
         v2.ToDtype(torch.float, scale=True),
         v2.Normalize(mean=[0.485,0.456,0.406],std=[0.229,0.224,0.225]),
@@ -98,15 +95,16 @@ def main():
         v2.Normalize(mean=[0.485,0.456,0.406],std=[0.229,0.224,0.225]),
     ])
 
-    dataset_name = ["CUB", "CUB and FGVC-Aircraft", "FoodX"][DATASET]
-    num_classes = [200, 200 + 100, 251][DATASET]
 
     cutmix = v2.CutMix(num_classes=num_classes, alpha=1.0)
     mixup = v2.MixUp(num_classes=num_classes, alpha=0.2)
     cutmix_or_mixup = v2.RandomChoice([cutmix, mixup])
 
-    def collate_fn(batch):
-        return cutmix_or_mixup(*default_collate(batch))
+    if CUT_UP_MIX:
+        def collate_fn(batch):
+            return cutmix_or_mixup(*default_collate(batch))
+    else:
+        collate_fn = None
 
     if dataset_name == 'CUB':
         dataset_path = "/apps/local/shared/CV703/datasets/CUB/CUB_200_2011"
@@ -177,10 +175,6 @@ def main():
     else:
         lr_scheduler = None
 
-    if LINEAR_PROBING:
-        linear_probing_epochs = PROBING_EPOCHS
-    else:
-        linear_probing_epochs = None
      
     #train model
     results = trainer(
@@ -193,13 +187,39 @@ def main():
         device=DEVICE,
         epochs=NUM_EPOCHS,
         save_dir=save_dir,
-        linear_probing_epochs=linear_probing_epochs
     )
 
     train_summary = {
         "config": config,
         "results": results,
     }
+
+    if FINETUNE:
+        for param in model.parameters():
+            param.requires_grad = True
+
+        optimizer = torch.optim.AdamW(model.parameters(), lr=FINETUNE_LR)
+        if LEARNING_SCHEDULER == "CosineAnnealingLR":
+            lr_scheduler = torch.optim.lr_scheduler.CosineAnnealingLR(optimizer, T_max=FINETUNE_EPOCHS)
+        else:
+            lr_scheduler = None
+
+        results_2 = trainer(
+            model=model,
+            train_loader=train_loader,
+            val_loader=test_loader,
+            loss_fn=loss,
+            optimizer=optimizer,
+            lr_scheduler=lr_scheduler,
+            device=DEVICE,
+            epochs=FINETUNE_EPOCHS,
+            save_dir=save_dir,
+        )
+
+        train_summary["results"]["train_loss"] += results_2["train_loss"]
+        train_summary["results"]["train_accuracy"] += results_2["train_accuracy"]
+        train_summary["results"]["val_loss"] += results_2["val_loss"]
+        train_summary["results"]["val_accuracy"] += results_2["val_accuracy"]
 
     with open(save_dir + "/train_summary.json", "w") as f:
         json.dump(train_summary, f, indent=4)

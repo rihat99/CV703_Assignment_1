@@ -42,7 +42,10 @@ def train_step(
 
         train_loss += loss.item()
 
-        correct += (output.argmax(dim=1) == target.argmax(dim=1)).sum().item()
+        if target.dim() == 1:
+            correct += (output.argmax(dim=1) == target).sum().item()
+        else:
+            correct += (output.argmax(dim=1) == target.argmax(dim=1)).sum().item()
         total += target.size(0)
 
     train_loss /= len(train_loader)
@@ -102,7 +105,6 @@ def trainer(
         device: torch.device,
         epochs: int,
         save_dir: str,
-        linear_probing_epochs=None
 ):
     """
     Train and evaluate model.
@@ -131,17 +133,12 @@ def trainer(
     best_val_loss = 1e10
 
     for epoch in range(1, epochs + 1):
-        if linear_probing_epochs is not None:
-            if epoch == linear_probing_epochs:
-                for param in model.parameters():
-                    param.requires_grad = True
-
 
         print(f"Epoch {epoch}:")
         train_loss, train_accuracy = train_step(model, train_loader, loss_fn, optimizer,  device)
         print(f"Train Loss: {train_loss:.4f}, Train Accuracy: {(train_accuracy * 100):.4f}")
 
-        print(f"Learning rate: {optimizer.param_groups[0]['lr']:.5f}")
+        print(f"Learning rate: {optimizer.param_groups[0]['lr']:.7f}")
         results["learning_rate"].append(optimizer.param_groups[0]["lr"])
 
         if lr_scheduler is not None:
