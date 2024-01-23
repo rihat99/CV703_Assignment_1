@@ -56,3 +56,22 @@ class LinearLR(torch.optim.lr_scheduler._LRScheduler):
 
     def get_lr(self):
         return [base_lr + (self.target_lr - base_lr) * self.last_epoch / (self.num_epochs - 1) for base_lr in self.base_lrs]
+
+class WarmupLR:
+    def __init__(self, optimizer, warmup_epochs, start_lr, target_lr):
+        self.optimizer = optimizer
+        self.warmup_epochs = warmup_epochs
+        self.start_lr = start_lr
+        self.target_lr = target_lr
+        self.current_epoch = 0
+
+        for param_group in self.optimizer.param_groups:
+            param_group['lr'] = target_lr / warmup_epochs
+
+    def step(self):
+        if self.current_epoch <= self.warmup_epochs:
+            lr = self.start_lr + ((self.target_lr - self.start_lr) / self.warmup_epochs) * self.current_epoch
+            for param_group in self.optimizer.param_groups:
+                param_group['lr'] = lr
+
+        self.current_epoch += 1

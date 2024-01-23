@@ -1,5 +1,5 @@
 from engine import trainer
-from utils import plot_results, LinearLR
+from utils import plot_results, LinearLR, WarmupLR
 from models.model import get_model
 from torch.utils.data import ConcatDataset 
 from dataset import CUBDataset, FGVCAircraft, FOODDataset
@@ -78,7 +78,7 @@ def main():
         v2.RandomResizedCrop((IMAGE_SIZE, IMAGE_SIZE), scale=(0.7, 1.0), antialias=True),
 
         # v2.AutoAugment(policy=v2.AutoAugmentPolicy.IMAGENET, ),
-        v2.RandAugment(num_ops=2, magnitude=10),
+        v2.RandAugment(num_ops=4, magnitude=10),
         v2.RandomErasing(p=0.1),
 
         v2.ToDtype(torch.float, scale=True),
@@ -184,7 +184,9 @@ def main():
     
     # warmup epochs
     optimizer = torch.optim.AdamW(model.parameters(), lr=WARMUP_LR)
-    lr_scheduler = LinearLR(optimizer, LEARNING_RATE, WARMUP_EPOCHS)
+    # lr_scheduler = LinearLR(optimizer, LEARNING_RATE, WARMUP_EPOCHS)
+    lr_scheduler = WarmupLR(optimizer, WARMUP_EPOCHS, WARMUP_LR, LEARNING_RATE)
+    lr_scheduler.step()
 
     results = trainer(
         model=model,
@@ -208,7 +210,7 @@ def main():
         param_group["lr"] = LEARNING_RATE
 
     if LEARNING_SCHEDULER == "CosineAnnealingLR":
-        lr_scheduler = torch.optim.lr_scheduler.CosineAnnealingLR(optimizer, T_max=NUM_EPOCHS, eta_min=FINETUNE_LR)
+        lr_scheduler = torch.optim.lr_scheduler.CosineAnnealingLR(optimizer, T_max=NUM_EPOCHS//2, eta_min=FINETUNE_LR)
     else:
         lr_scheduler = None
     
