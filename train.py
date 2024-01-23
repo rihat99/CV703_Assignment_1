@@ -78,7 +78,7 @@ def main():
         v2.RandomResizedCrop((IMAGE_SIZE, IMAGE_SIZE), scale=(0.7, 1.0), antialias=True),
 
         # v2.AutoAugment(policy=v2.AutoAugmentPolicy.IMAGENET, ),
-        v2.RandAugment(num_ops=4, magnitude=10),
+        v2.RandAugment(num_ops=2, magnitude=10),
         v2.RandomErasing(p=0.1),
 
         v2.ToDtype(torch.float, scale=True),
@@ -210,11 +210,13 @@ def main():
         param_group["lr"] = LEARNING_RATE
 
     if LEARNING_SCHEDULER == "CosineAnnealingLR":
-        lr_scheduler = torch.optim.lr_scheduler.CosineAnnealingLR(optimizer, T_max=NUM_EPOCHS//2, eta_min=FINETUNE_LR)
+        lr_scheduler = torch.optim.lr_scheduler.CosineAnnealingLR(optimizer, T_max=NUM_EPOCHS, eta_min=FINETUNE_LR)
     else:
         lr_scheduler = None
     
     # regualr epochs
+    unfreeze_order = [5, 4, 3, 2, 1, 0]
+
     results = trainer(
         model=model,
         train_loader=train_loader,
@@ -225,6 +227,7 @@ def main():
         device=DEVICE,
         epochs=NUM_EPOCHS,
         save_dir=save_dir,
+        unfreeze=unfreeze_order,
     )
 
     train_summary["results"]["train_loss"] += results["train_loss"]

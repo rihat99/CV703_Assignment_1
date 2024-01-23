@@ -105,6 +105,7 @@ def trainer(
         device: torch.device,
         epochs: int,
         save_dir: str,
+        unfreeze=None,
 ):
     """
     Train and evaluate model.
@@ -159,6 +160,14 @@ def trainer(
             save_model(model, save_dir + "/best_model.pth")
 
         save_model(model, save_dir + "/last_model.pth")
+
+        if unfreeze is not None and epoch % 10 == 0:
+            stage = unfreeze[epoch // 10 - 1]
+
+            for param in model.conv_model.features[stage].parameters():
+                param.requires_grad = True
+
+            
 
 
     return results
