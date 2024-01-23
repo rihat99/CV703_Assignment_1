@@ -75,11 +75,11 @@ def main():
     #load data
     transforms_train = v2.Compose([
         v2.ToImage(),
-        v2.RandomResizedCrop((IMAGE_SIZE, IMAGE_SIZE), scale=(0.8, 1.0), antialias=True),
+        v2.RandomResizedCrop((IMAGE_SIZE, IMAGE_SIZE), scale=(0.7, 1.0), antialias=True),
 
         # v2.AutoAugment(policy=v2.AutoAugmentPolicy.IMAGENET, ),
         v2.RandAugment(num_ops=2, magnitude=10),
-        v2.RandomErasing(p=0.2),
+        v2.RandomErasing(p=0.1),
 
         v2.ToDtype(torch.float, scale=True),
         v2.Normalize(mean=[0.485,0.456,0.406],std=[0.229,0.224,0.225]),
@@ -203,7 +203,7 @@ def main():
         param_group["lr"] = LEARNING_RATE
 
     if LEARNING_SCHEDULER == "CosineAnnealingLR":
-        lr_scheduler = torch.optim.lr_scheduler.CosineAnnealingLR(optimizer, T_max=NUM_EPOCHS)
+        lr_scheduler = torch.optim.lr_scheduler.CosineAnnealingLR(optimizer, T_max=NUM_EPOCHS, eta_min=FINETUNE_LR)
     else:
         lr_scheduler = None
     
@@ -233,11 +233,11 @@ def main():
         for param_group in optimizer.param_groups:
             param_group["lr"] = FINETUNE_LR
         
-        if LEARNING_SCHEDULER == "CosineAnnealingLR":
-            lr_scheduler = torch.optim.lr_scheduler.CosineAnnealingLR(optimizer, T_max=FINETUNE_EPOCHS)
-        else:
-            lr_scheduler = None
-        # lr_scheduler = None
+        # if LEARNING_SCHEDULER == "CosineAnnealingLR":
+        #     lr_scheduler = torch.optim.lr_scheduler.CosineAnnealingLR(optimizer, T_max=FINETUNE_EPOCHS)
+        # else:
+        #     lr_scheduler = None
+        lr_scheduler = None
 
         results = trainer(
             model=model,
