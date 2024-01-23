@@ -32,6 +32,8 @@ NUM_EPOCHS = int(config["NUM_EPOCHS"])
 FINETUNE = config["FINETUNE"]
 FINETUNE_EPOCHS = int(config["FINETUNE_EPOCHS"])
 FINETUNE_LR = float(config["FINETUNE_LR"])
+WARMUP_EPOCHS = int(config["WARMUP_EPOCHS"])
+WARMUP_LR = float(config["WARMUP_LR"])
 
 LOSS = config["LOSS"]
 LABEL_SMOOTHING = float(config["LABEL_SMOOTHING"])
@@ -76,7 +78,7 @@ def main():
         v2.RandomResizedCrop((IMAGE_SIZE, IMAGE_SIZE), scale=(0.8, 1.0), antialias=True),
 
         # v2.AutoAugment(policy=v2.AutoAugmentPolicy.IMAGENET, ),
-        v2.RandAugment(num_ops=6, magnitude=15),
+        v2.RandAugment(num_ops=2, magnitude=10),
         v2.RandomErasing(p=0.2),
 
         v2.ToDtype(torch.float, scale=True),
@@ -115,9 +117,11 @@ def main():
     if dataset_name == 'CUB':
         dataset_path = dataset_path_prefix + "CUB/CUB_200_2011"
 
+        train_simple_dataset = CUBDataset(image_root_path=dataset_path, transform=transforms_test, split="train")
         train_dataset = CUBDataset(image_root_path=dataset_path, transform=transforms_train, split="train")
         test_dataset = CUBDataset(image_root_path=dataset_path, transform=transforms_test, split="test")
 
+        train_simple_loader = DataLoader(train_simple_dataset, batch_size=BATCH_SIZE, shuffle=True, num_workers=8)
         train_loader = DataLoader(train_dataset, batch_size=BATCH_SIZE, shuffle=True, num_workers=8, collate_fn=collate_fn)
         test_loader = DataLoader(test_dataset, batch_size=BATCH_SIZE, shuffle=False, num_workers=8)
 
@@ -174,15 +178,36 @@ def main():
     else:
         raise Exception("Loss not implemented")
     
-    optimizer = torch.optim.AdamW(model.parameters(), lr=LEARNING_RATE)
+    # warmup epochs
+    optimizer = torch.optim.AdamW(model.parameters(), lr=WARMUP_LR)
+
+    results = trainer(
+        model=model,
+        train_loader=train_simple_loader,
+        val_loader=test_loader,
+        loss_fn=loss,
+        optimizer=optimizer,
+        lr_scheduler=None,
+        device=DEVICE,
+        epochs=WARMUP_EPOCHS,
+        save_dir=save_dir,
+    )
+
+    train_summary = {
+        "config": config,
+        "results": results,
+    }
+
+
+    for param_group in optimizer.param_groups:
+        param_group["lr"] = LEARNING_RATE
 
     if LEARNING_SCHEDULER == "CosineAnnealingLR":
         lr_scheduler = torch.optim.lr_scheduler.CosineAnnealingLR(optimizer, T_max=NUM_EPOCHS)
     else:
         lr_scheduler = None
-
-     
-    #train model
+    
+    # regualr epochs
     results = trainer(
         model=model,
         train_loader=train_loader,
@@ -195,23 +220,26 @@ def main():
         save_dir=save_dir,
     )
 
-    train_summary = {
-        "config": config,
-        "results": results,
-    }
+    train_summary["results"]["train_loss"] += results["train_loss"]
+    train_summary["results"]["train_accuracy"] += results["train_accuracy"]
+    train_summary["results"]["val_loss"] += results["val_loss"]
+    train_summary["results"]["val_accuracy"] += results["val_accuracy"]
+    train_summary["results"]["learning_rate"] += results["learning_rate"]
 
     if FINETUNE:
         for param in model.parameters():
             param.requires_grad = True
 
-        optimizer = torch.optim.AdamW(model.parameters(), lr=FINETUNE_LR)
-        # if LEARNING_SCHEDULER == "CosineAnnealingLR":
-        #     lr_scheduler = torch.optim.lr_scheduler.CosineAnnealingLR(optimizer, T_max=FINETUNE_EPOCHS)
-        # else:
-        #     lr_scheduler = None
-        lr_scheduler = None
+        for param_group in optimizer.param_groups:
+            param_group["lr"] = FINETUNE_LR
+        
+        if LEARNING_SCHEDULER == "CosineAnnealingLR":
+            lr_scheduler = torch.optim.lr_scheduler.CosineAnnealingLR(optimizer, T_max=FINETUNE_EPOCHS)
+        else:
+            lr_scheduler = None
+        # lr_scheduler = None
 
-        results_2 = trainer(
+        results = trainer(
             model=model,
             train_loader=train_loader,
             val_loader=test_loader,
@@ -223,16 +251,17 @@ def main():
             save_dir=save_dir,
         )
 
-        train_summary["results"]["train_loss"] += results_2["train_loss"]
-        train_summary["results"]["train_accuracy"] += results_2["train_accuracy"]
-        train_summary["results"]["val_loss"] += results_2["val_loss"]
-        train_summary["results"]["val_accuracy"] += results_2["val_accuracy"]
+        train_summary["results"]["train_loss"] += results["train_loss"]
+        train_summary["results"]["train_accuracy"] += results["train_accuracy"]
+        train_summary["results"]["val_loss"] += results["val_loss"]
+        train_summary["results"]["val_accuracy"] += results["val_accuracy"]
+        train_summary["results"]["learning_rate"] += results["learning_rate"]
 
     with open(save_dir + "/train_summary.json", "w") as f:
         json.dump(train_summary, f, indent=4)
 
-    plot_results(results["train_loss"], results["val_loss"], "Loss", save_dir)
-    plot_results(results["train_accuracy"], results["val_accuracy"], "Accuracy", save_dir)
+    plot_results(train_summary["results"]["train_loss"], train_summary["results"]["val_loss"], "Loss", save_dir)
+    plot_results(train_summary["results"]["train_accuracy"], train_summary["results"]["val_accuracy"], "Accuracy", save_dir)
 
 if __name__ == "__main__":
     main()
