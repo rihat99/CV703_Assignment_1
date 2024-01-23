@@ -1,5 +1,5 @@
 from engine import trainer
-from utils import plot_results
+from utils import plot_results, LinearLR
 from models.model import get_model
 from torch.utils.data import ConcatDataset 
 from dataset import CUBDataset, FGVCAircraft, FOODDataset
@@ -84,12 +84,6 @@ def main():
         v2.ToDtype(torch.float, scale=True),
         v2.Normalize(mean=[0.485,0.456,0.406],std=[0.229,0.224,0.225]),
     ])
-    # transforms_train = v2.Compose([
-    #     v2.ToImage(),
-    #     v2.ToDtype(torch.float32, scale=True),
-    #     v2.Resize((224, 224), antialias=True),
-    #     v2.Normalize(mean=[0.485,0.456,0.406],std=[0.229,0.224,0.225]),
-    # ])
 
     transforms_test = v2.Compose([
         v2.ToImage(),
@@ -128,17 +122,27 @@ def main():
         class_names = train_dataset.classes
 
     elif dataset_name == 'CUB and FGVC-Aircraft':
+
         dataset_path_cub = dataset_path_prefix + "CUB/CUB_200_2011"
+        train_simple_dataset_cub = CUBDataset(image_root_path=dataset_path_cub, transform=transforms_test, split="train")
         train_dataset_cub = CUBDataset(image_root_path=dataset_path_cub, transform=transforms_train, split="train")
         test_dataset_cub = CUBDataset(image_root_path=dataset_path_cub, transform=transforms_test, split="test")
 
         dataset_path_aircraft = dataset_path_prefix + "fgvc-aircraft-2013b"
+        train_simple_dataset_aircraft = FGVCAircraft(root=dataset_path_aircraft, transform=transforms_test, train=True)
         train_dataset_aircraft = FGVCAircraft(root=dataset_path_aircraft, transform=transforms_train, train=True)
         test_dataset_aircraft = FGVCAircraft(root=dataset_path_aircraft, transform=transforms_test, train=False)
 
+        concat_dataset_train_simple = ConcatDataset([train_simple_dataset_cub, train_simple_dataset_aircraft])
         concat_dataset_train = ConcatDataset([train_dataset_cub, train_dataset_aircraft])
         concat_dataset_test = ConcatDataset([test_dataset_cub, test_dataset_aircraft])
 
+        train_simple_loader = torch.utils.data.DataLoader(
+                    concat_dataset_train_simple,
+                    batch_size=BATCH_SIZE, shuffle=True,
+                    num_workers=8, pin_memory=True,
+                    collate_fn=None
+                    )
         train_loader = torch.utils.data.DataLoader(
                     concat_dataset_train,
                     batch_size=BATCH_SIZE, shuffle=True,
@@ -180,14 +184,15 @@ def main():
     
     # warmup epochs
     optimizer = torch.optim.AdamW(model.parameters(), lr=WARMUP_LR)
+    lr_scheduler = LinearLR(optimizer, LEARNING_RATE, WARMUP_EPOCHS)
 
     results = trainer(
         model=model,
-        train_loader=train_simple_loader,
+        train_loader=train_loader,
         val_loader=test_loader,
         loss_fn=loss,
         optimizer=optimizer,
-        lr_scheduler=None,
+        lr_scheduler=lr_scheduler,
         device=DEVICE,
         epochs=WARMUP_EPOCHS,
         save_dir=save_dir,

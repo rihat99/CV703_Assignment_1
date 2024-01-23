@@ -46,3 +46,13 @@ def save_model(model, path):
 def load_model(model, path):
     model.load_state_dict(torch.load(path))
     return model
+
+# class for custom linearly increasing learning rate scheduler with target learning rate
+class LinearLR(torch.optim.lr_scheduler._LRScheduler):
+    def __init__(self, optimizer, target_lr, num_epochs, last_epoch=-1):
+        self.target_lr = target_lr
+        self.num_epochs = num_epochs
+        super().__init__(optimizer, last_epoch)
+
+    def get_lr(self):
+        return [base_lr + (self.target_lr - base_lr) * self.last_epoch / (self.num_epochs - 1) for base_lr in self.base_lrs]
