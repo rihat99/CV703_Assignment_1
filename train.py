@@ -164,7 +164,7 @@ def main():
         dataset_path = dataset_path_prefix + "FoodX/food_dataset"
 
         train_dataset = FOODDataset(data_dir=dataset_path, transform=transforms_train, split="train")
-        test_dataset = FOODDataset(data_dir=dataset_path, transform=transforms_test, split="test")
+        test_dataset = FOODDataset(data_dir=dataset_path, transform=transforms_test, split="val")
 
         train_loader = DataLoader(train_dataset, batch_size=BATCH_SIZE, shuffle=True, num_workers=8, collate_fn=collate_fn)
         test_loader = DataLoader(test_dataset, batch_size=BATCH_SIZE, shuffle=False, num_workers=8)

@@ -1,6 +1,6 @@
 LEARNING_RATE : 3e-4
 LEARNING_SCHEDULER : CosineAnnealingLR
-BATCH_SIZE : 32
+BATCH_SIZE : 64
 NUM_EPOCHS : 50
 FINETUNE: True
 FINETUNE_EPOCHS : 30
@@ -11,12 +11,12 @@ WARMUP_LR : 1e-5
 
 IMAGE_SIZE : 224
 
-MODEL: ConvTransNeXtTiny
+MODEL: ConvTransNeXtBase
 PRETRAINED: True
 FREEZE: True
 LOSS: CrossEntropyLoss
 
-DATASET: 1 # 0: CUB, 1: CUB and FGVC-Aircraft, 2: FoodX
+DATASET: 2 # 0: CUB, 1: CUB and FGVC-Aircraft, 2: FoodX
 CUT_UP_MIX: True
 HPC: False
 

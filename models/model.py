@@ -60,6 +60,8 @@ def get_model(model_name, pretrained=False, num_classes=10, freeze=False):
         return ConvTransNeXtLarge(pretrained, num_classes, freeze)
     elif model_name == "ConvTransNeXtTiny":
         return ConvTransNeXtTiny(pretrained, num_classes, freeze)
+    elif model_name == "ConvTransNeXtBase":
+        return ConvTransNeXtBase(pretrained, num_classes, freeze)
     
     elif model_name == "ConvNeXtV2Large":
         return convnextv2_large(pretrained, num_classes, freeze)

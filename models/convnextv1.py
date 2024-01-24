@@ -151,23 +151,23 @@ class ConvTransNeXtLarge(nn.Module):
         else:
             self.conv_model = convnext_large()
             
-        self.conv_model.features = nn.Sequential(*self.conv_model.features[:6])
+        self.conv_model.features = nn.Sequential(*self.conv_model.features[:7])
 
-        self.pos_encoder = PositionalEncoding(768, dropout=0.2)
+        self.pos_encoder = PositionalEncoding(1536, dropout=0.1)
 
         encoder_layer = nn.TransformerEncoderLayer(
-            d_model=768,  # This should match the feature size of ConvNeXt's last layer
+            d_model=1536,  # This should match the feature size of ConvNeXt's last layer
             nhead=8,      # Number of attention heads
-            dim_feedforward=2048,
-            dropout=0.2,
+            dim_feedforward=1024,
+            dropout=0.1,
             activation='gelu',
             batch_first=False
         )
-        self.transformer_encoder = nn.TransformerEncoder(encoder_layer, num_layers=4)
+        self.transformer_encoder = nn.TransformerEncoder(encoder_layer, num_layers=3)
 
         self.conv_model.classifier = torch.nn.Sequential(
             nn.Linear(
-                in_features=768,
+                in_features=1536,
                 out_features=num_classes,
                 bias=True
             )
@@ -238,6 +238,62 @@ class ConvTransNeXtTiny(nn.Module):
         self.conv_model.classifier = torch.nn.Sequential(
             nn.Linear(
                 in_features=384,
+                out_features=num_classes,
+                bias=True
+            )
+    )
+
+    def forward(self, x):
+        x = self.conv_model.features(x)
+
+        b, c, h, w = x.size()
+        x = x.view(b, c, h * w).permute(2, 0, 1)
+
+        x = self.pos_encoder(x)
+        x = self.transformer_encoder(x)
+        # x = x.permute(0, 2, 1).view(b, c, h, w)
+
+        # x = self.conv_model.avgpool(x)
+
+        x = torch.mean(x, dim=0)
+
+        x = self.conv_model.classifier(x)
+
+        return x
+
+class ConvTransNeXtBase(nn.Module):
+    def __init__(self, pretrained=True, num_classes=200, freeze=True):
+        super().__init__()
+        
+        if pretrained:
+            self.conv_model = convnext_base(weights=ConvNeXt_Base_Weights.IMAGENET1K_V1)
+
+            # Freeze model weights
+            if freeze:
+                for i in range(6):
+                    for param in self.conv_model.features[i].parameters():
+                        param.requires_grad = False
+
+        else:
+            self.conv_model = convnext_tiny()
+            
+        self.conv_model.features = nn.Sequential(*self.conv_model.features[:6])
+
+        self.pos_encoder = PositionalEncoding(512, dropout=0.1)
+
+        encoder_layer = nn.TransformerEncoderLayer(
+            d_model=512,  # This should match the feature size of ConvNeXt's last layer
+            nhead=8,      # Number of attention heads
+            dim_feedforward=1024,
+            dropout=0.1,
+            activation='gelu',
+            batch_first=False
+        )
+        self.transformer_encoder = nn.TransformerEncoder(encoder_layer, num_layers=3)
+
+        self.conv_model.classifier = torch.nn.Sequential(
+            nn.Linear(
+                in_features=512,
                 out_features=num_classes,
                 bias=True
             )
