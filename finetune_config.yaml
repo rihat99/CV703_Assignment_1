@@ -1,0 +1,21 @@
+LEARNING_RATE : [1e-4, 3e-4, 5e-4, 8e-4, 1e-5, 3e-5, 5e-5, 8e-5, 1e-6, 3e-6, 1e-7, 3e-7]
+# LEARNING_RATE : [1e-2, 3e-2, 1e-3, 3e-3]
+
+LEARNING_SCHEDULER : CosineAnnealingLR
+BATCH_SIZE : 32
+NUM_EPOCHS : 30
+
+IMAGE_SIZE : 224
+
+MODEL: ConvTransNeXtBase
+PRETRAINED: True
+FREEZE: False
+LOSS: CrossEntropyLoss
+
+DATASET: 1 # 0: CUB, 1: CUB and FGVC-Asircraft, 2: FoodX
+CUT_UP_MIX: True
+HPC: True
+
+INIT_PATH: "/home/nuren.zhaksylyk/Documents/CV703/CV703_Assignment_1/runs/CUB and FGVC-Aircraft/ConvTransNeXtBase/2024-01-28_18-34-23/best_model.pth"
+
+LABEL_SMOOTHING: 0.1

@@ -164,7 +164,10 @@ def trainer(
         if unfreeze is not None and epoch % 10 == 0:
             stage = unfreeze[epoch // 10 - 1]
 
-            for param in model.features[stage].parameters():
+            # for param in model.features[stage].parameters():
+            #     param.requires_grad = True
+
+            for param in model.conv_model.features[stage].parameters():
                 param.requires_grad = True
 
             
